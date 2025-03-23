@@ -5,6 +5,9 @@ import pygame
 import os
 from pynput import keyboard
 import threading
+import time
+import winsound
+import pyttsx3
 
 class ChangeYourVoice:
     def __init__(self, root):
@@ -56,8 +59,9 @@ class ChangeYourVoice:
 
             messagebox.showinfo("成功", "游標方案已變更！請等待刷新桌面。")
 
-            # 重新啟動 explorer 讓游標生效
-            os.system("taskkill /f /im explorer.exe & start explorer.exe")
+            os.system("taskkill /f /im explorer.exe")
+            time.sleep(1)  # 等待一點時間，讓 explorer 確實終止
+            os.system("start explorer.exe")
         except Exception as e:
             messagebox.showerror("錯誤", f"變更失敗: {e}")
 
@@ -72,9 +76,26 @@ class ChangeYourVoice:
         if file_path:
             self.keypress_sound = pygame.mixer.Sound(file_path)
             self.keypress_sound.set_volume(self.volume_level)  # 設定初始音量
-            self.label.config(text=f"選擇的音效: {file_path.split('/')[-1]}")
+            self.keyboard_label.config(text=f"選擇的音效: {file_path.split('/')[-1]}")
 
-    def adjust_volume(self, val):
+    def choose_alart_sound(self):
+        """讓使用者選擇音效檔案"""
+        global keypress_sound
+        self.alartsound_path = filedialog.askopenfilename(
+            title="選擇音效",
+            filetypes=[("音效文件", "*.wav;*.mp3;*.ogg")]
+        )
+
+        key = r"AppEvents\Schemes\Apps\.Default\SystemAsterisk\.Current"
+
+        if self.alartsound_path:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key, 0, winreg.KEY_SET_VALUE) as reg_key:
+                winreg.SetValueEx(reg_key, "", 0, winreg.REG_SZ, self.alartsound_path)
+            print("系統警示音已變更為:", self.alartsound_path)
+            self.alart_sound = pygame.mixer.Sound(self.alartsound_path)
+            self.alart_label.config(text=f"選擇的音效: {self.alartsound_path.split('/')[-1]}")
+
+    def adjust_keyboard_volume(self, val):
         self.volume_level = float(val) 
         if self.keypress_sound:
             self.keypress_sound.set_volume(self.volume_level)
@@ -82,6 +103,16 @@ class ChangeYourVoice:
     def play_sound(self, key):
         if self.keypress_sound:
             self.keypress_sound.play()
+
+    def play_alart_sound(self):
+        self.alart_sound.play()
+        # engine = pyttsx3.init()
+        # engine.say("警告！這是一個警示音。")
+        # engine.runAndWait()
+
+    def play_alart(self):
+        alart_thread = threading.Thread(target=self.play_alart_sound, daemon=True)
+        alart_thread.start()
 
     def start_keyboard_listener(self):
         with keyboard.Listener(on_press=self.play_sound) as listener:
@@ -108,15 +139,27 @@ class ChangeYourVoice:
         self.apply_btn = Button(self.root, text="套用游標方案", command=self.apply_cursors, font=("Arial", 12), bg="green", fg="white")
         self.apply_btn.grid(row=len(self.cursor_types) + 1, column=0, columnspan=3, pady=10)
 
-        self.label = tk.Label(self.root, text="未選擇音效", fg="gray")
-        self.label.grid(row=0, column=5, columnspan=3, pady=10)
+        self.keyboard_label = tk.Label(self.root, text="未選擇鍵盤音效", fg="gray")
+        self.keyboard_label.grid(row=0, column=6, columnspan=3, pady=10)
 
         self.choose_btn = tk.Button(self.root, text="選擇音效", command=self.choose_sound)
-        self.choose_btn.grid(row=2, column=5, columnspan=3, pady=10)
+        self.choose_btn.grid(row=2, column=6, columnspan=3, pady=10)
 
-        self.volume_slider = tk.Scale(self.root, from_=0, to=1, resolution=0.01, orient="horizontal", label="音量", command=self.adjust_volume)
+        self.volume_slider = tk.Scale(self.root, from_=0, to=1, resolution=0.01, orient="horizontal", label="音量", command=self.adjust_keyboard_volume)
         self.volume_slider.set(self.volume_level)
-        self.volume_slider.grid(row=4, column=5, columnspan=3, pady=10)
+        self.volume_slider.grid(row=4, column=6, columnspan=3, pady=10)
+
+        self.alart_label = tk.Label(self.root, text="未選擇警示音音效", fg="gray")
+        self.alart_label.grid(row=0, column=10, columnspan=3, pady=10)
+
+        self.alart_choose_btn = tk.Button(self.root, text="選擇音效", command=self.choose_alart_sound)
+        self.alart_choose_btn.grid(row=2, column=10, columnspan=3, pady=10)
+
+        self.alart_play_btn = tk.Button(self.root, text="播放警示音", command=self.play_alart)
+        self.alart_play_btn.grid(row=4, column=10, columnspan=3, pady=10)
+
+        self.apply_alart = Label(self.root, text="以上設定可能需要重啟電腦", font=("Arial", 12), bg="black", fg="red")
+        self.apply_alart.grid(row=10, column=0, columnspan=3, pady=10)
 
         self.root.bind("<KeyPress>", self.play_sound)
 
